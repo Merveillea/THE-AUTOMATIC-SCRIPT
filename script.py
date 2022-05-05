@@ -1,6 +1,8 @@
 # from dataclasses import dataclass
 from importlib.abc import PathEntryFinder
 from datetime import date, datetime
+import string
+from dateutil.relativedelta import relativedelta
 from pathlib import Path
 from hashlib import new
 from re import T
@@ -51,10 +53,20 @@ def lodInformation (pathtolog, file):
         pasa = [sent.split(",") for sent in pas if sent]
         i = int(pasa[0][0]) + 1
         id = str(i)
-
     insertAtTop(pathtolog, (id+ ", "+ filelist[0] + '\n'))
     mog.close()
     return(id, filelist[0])
+
+def getIdOutOfSixMonths (pathtolog):
+    mog = open(pathtolog, "r+")
+    if os.stat(pathtolog).st_size != 0:
+        while (pas := mog.readline().rstrip()):
+            pasa = [sent.split(",") for sent in pas if sent]
+        i = int(pasa[0][0]) + 744
+    else:
+        return (-1)
+    mog.close()
+    return(i)
 
 def setFile(file):
     data = pd.read_csv(file)
@@ -69,52 +81,60 @@ def setFile(file):
     parseFilename(filename)
     # print(data.columns)
     # print(data.head(10))
-    return(data)
+    return(data, fileid)
 
 # Connecting to DB
 def connectToBd(file):
 
-    dataDf = setFile(file)
+    dataDf, idFile = setFile(file)
 
     dataDf['fileid'] = dataDf['fileid'].astype(str)
     dataDf['filename'] = dataDf['filename'].astype(str)
     dataDf['msisdn'] = dataDf['msisdn'].astype(str)
     dataDf['channel'] = dataDf['channel'].astype(str)
+
     dataDf['channelcode'] = dataDf['channelcode'].astype(str)
     dataDf['shortcode'] = dataDf['shortcode'].astype(str)
     dataDf['requestid'] = dataDf['requestid'].astype(str)
     dataDf['starttime'] = dataDf['starttime'].astype(str)
     dataDf['endtime'] = dataDf['endtime'].astype(str)
+
     dataDf['productid'] = dataDf['productid'].astype(str)
     dataDf['productname'] = dataDf['productname'].astype(str)
     dataDf['producttype'] = dataDf['producttype'].astype(str)
     dataDf['productconstaint'] = dataDf['productconstaint'].astype(str)
     dataDf['transactioncode'] = dataDf['transactioncode'].astype(str)
+
     dataDf['refillid'] = dataDf['refillid'].astype(str)
     dataDf['originoperatorid'] = dataDf['originoperatorid'].astype(str)
     dataDf['correlationid'] = dataDf['correlationid'].astype(str)
     dataDf['amountcharge'] = dataDf['amountcharge'].astype(str)
     dataDf['momocharging'] = dataDf['momocharging'].astype(str)
+
     dataDf['success/failure'] = dataDf['success/failure'].astype(str)
     dataDf['reason'] = dataDf['reason'].astype(str)
     dataDf['notification'] = dataDf['notification'].astype(str)
     dataDf['sptype'] = dataDf['sptype'].astype(str)
     dataDf['NA'] = dataDf['NA'].astype(str)
+
     dataDf['SKIPPED'] = dataDf['SKIPPED'].astype(str)
     dataDf['SKIPPED.1'] = dataDf['SKIPPED.1'].astype(str)
     dataDf['SKIPPED.2'] = dataDf['SKIPPED.2'].astype(str)
     dataDf['NA.1'] = dataDf['NA.1'].astype(str)
     dataDf['RealTime'] = dataDf['RealTime'].astype(str)
+
     dataDf['0'] = dataDf['0'].astype(str)
     dataDf['SKIPPED.3'] = dataDf['SKIPPED.3'].astype(str)
     dataDf['FALSE'] = dataDf['FALSE'].astype(str)
-    dataDf['NA.2'] = dataDf['NA.1'].astype(str)
-    dataDf['NA.3'] = dataDf['NA.1'].astype(str)
-    dataDf['NA.4'] = dataDf['NA.1'].astype(str)
-    dataDf['NA.5'] = dataDf['NA.1'].astype(str)
+    dataDf['NA.2'] = dataDf['NA.2'].astype(str)
+    dataDf['NA.3'] = dataDf['NA.3'].astype(str)
+
+    dataDf['NA.4'] = dataDf['NA.4'].astype(str)
+    dataDf['NA.5'] = dataDf['NA.5'].astype(str)
     dataDf['isgiftbundle'] = dataDf['isgiftbundle'].astype(str)
     dataDf['isrenewble' ] = dataDf['isrenewble'].astype(str)
     dataDf['pcubad'] = dataDf['pcubad'].astype(str)
+
     dataDf['actualcost'] = dataDf['actualcost'].astype(str)
     dataDf['gifteenumber'] = dataDf['gifteenumber'].astype(str)
     dataDf['expirydate'] = dataDf['expirydate'].astype(str)
@@ -137,14 +157,23 @@ def connectToBd(file):
         PCUBAD, ACTUALCOST, GIFTEENUMBER, EXPIRYDATE) values (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10, :11, :12, :13, :14, :15, :16, :17, :18, :19, :20, :21, :22, :23, :24, :25, :26, :27, :28, :29, :30, :31, :32, :33, :34, :35, \
         :36, :37, :38, :39, :40, :41, :42)"
 
+        sqlDropTxt = "DELETE FROM MKTCONCEPT.CIS_BUNDLE_LOADING WHERE FILEID<"
+
         # execute the sql to perform data extraction
-        print("INSERTING DATA . . .")
+        print("\nINSERTING DATA . . .")
         cursor.executemany(sqlTxt, [x for x in dataInsertionTuples])
 
-        # commit the changes
-        # con.commit()
+        idB = getIdOutOfSixMonths(Path(".log"))
+        if (idB != -1 and idB < int(idFile)):
+            sqlDropTxt =(sqlDropTxt + str(idB) + ";")
+            print("\nDELETING 6MONTHS OLD DATA  . . .")
+            print(sqlDropTxt)
+            cursor.execute(sqlDropTxt, [])
 
-        print("Record inserted succesfully")
+        # commit the changes
+        con.commit()
+
+        print("ppReport inserted succesfully")
     except cx_Oracle.DatabaseError as e:
         print("Problem connecting to Oracle", e)
 
@@ -156,6 +185,7 @@ def connectToBd(file):
         if con:
             con.close()
             print("Disconneted")
+            print("===========================================================")
 
 
 def automate():
